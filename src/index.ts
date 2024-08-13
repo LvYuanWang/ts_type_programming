@@ -1,60 +1,48 @@
-// type User = {
-//   name: string,
-//   age: number,
-//   sex?: string
-// }
-// let obj: User = {
-//   name: 'jack',
-//   age: 18
-// }
-// obj.type = 'admin';
-
-
-// type User = {
-//   name: string,
-//   age: number,
-//   [key: string]: string | number
-// }
-
-// // 对象的键, 可以是string, number和symbol类型
-// let obj: User = {
-//   name: 'jack',
-//   sex: '男',
-//   age: 18
-// }
-// obj.type = 'admin';
-// console.log(obj.sex);
-
-
-// 索引签名类型 | 映射类型
-// type anyTypeObj = {
-//   [key: string]: any
-// }
-
-// let obj: anyTypeObj = {};
-// obj.name = 'jack';
-// obj.age = 18;
-
-
-// Utility Types
-// Record<Keys, Type>
-type CatName = "miffy" | "boris" | "mordred";
-
-interface CatInfo {
-  age: number;
-  breed: string;
+type User = {
+  id: number,
+  name: string,
+  sex: '男' | '女'
 }
 
-const cats: Record<CatName, CatInfo> = {
-  miffy: { age: 10, breed: "Persian" },
-  boris: { age: 5, breed: "Maine Coon" },
-  mordred: { age: 16, breed: "British Shophar" },
-};
+// 小技巧: 通过 & {} 可以看到keyof组成的联合类型
+type UserKeyof = keyof User & {}; // "id" | "name" | "sex"
 
-cats.boris;
+let a: UserKeyof = 'name';  // "id" | "name" | "sex"
 
-const user: Record<string, any> = {
-  name: 'joker',
+const person = {
+  name: 'Joker',
   age: 20,
-  gender: '女'
+  sex: '男'
 }
+
+// 可以和 typeof 联合使用, 获取一个对象的键的联合类型
+type PersonKeys = keyof typeof person;  // "name" | "sex" | "age"
+
+// 可以和方括号运算符联合使用, 获取对象类型值的类型
+type Person = {
+  name: string,
+  age: number,
+  isAdult: boolean
+}
+
+type PersonValueType = Person[keyof Person];  // string | number | boolean
+
+// 重载 createElement
+
+// function createElement(tagName: 'div'): HTMLDivElement;
+// function createElement(tagName: 'span'): HTMLSpanElement;
+// function createElement(tagName: string): HTMLElement {
+//   return document.createElement(tagName);
+// }
+
+// 但是这样写太麻烦了, 我们可以通过 keyof 来简化, 使用 TS 写好的HTMLElementTagNameMap类型
+type TagName = keyof HTMLElementTagNameMap & {};
+
+function createElement<T extends TagName>(tagName: T): HTMLElementTagNameMap[T] {
+  return document.createElement(tagName);
+}
+
+// createElement('layer');  // 报错, 因为layer不是合法的标签名, 类型"layer"的参数不能赋给类型"keyof HTMLElementTagNameMap"的参数
+const div = createElement('div');  // HTMLDivElement
+const span = createElement('span');  // HTMLSpanElement
+const canvas = createElement('canvas');  // HTMLCanvasElement
