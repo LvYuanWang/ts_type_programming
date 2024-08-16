@@ -1,43 +1,38 @@
-type User = {
-  readonly id: number,
-  name: string,
-  tel: string,
-  address?: string,
-  gender: boolean
-}
+type T1 = 1 extends number ? true : false; // true
+type T2 = "1" extends number ? true : false; // false
+type T3 = string extends object ? true : false; // false
+type T4 = string extends Object ? true : false; // true
+type T5 = { age: 18 } extends object ? true : false; // true
+type T6 = { a: 1, b: 2 } extends { a: 1 } ? true : false; // true: { a: 1, b: 2 } 是 { a: 1 } 的子类型
+type T7 = { a: 1 } extends { a: 1, b: 2 } ? true : false; // false: { a: 1 } 不是 { a: 1, b: 2 } 的子类型
+type T8 = string extends {} ? true : false; // true: 空对象是所有类型的子类型
 
-// type ValueType = User['id' | 'name']; // string | number
-type ValueType = User[keyof User]
+type T9 = {} extends object ? true : false; // true: 空对象是所有类型的子类型
+type T10 = object extends {} ? true : false; // true
+type T11 = {} extends Object ? true : false; // true
+type T12 = Object extends {} ? true : false; // true
+type T13 = Object extends object ? true : false; // true
+type T14 = object extends Object ? true : false; // true
+// 总结: {} 是所有类型的子类型，Object 是所有对象类型的子类型，object 是所有非原始类型的子类型
 
-// 泛型
-type MyReadonly<T> = {
-  readonly [key in keyof T]: T[key]
-}
+// 只需要记住一点：extends 是判断左边的类型是否是右边类型的子类型
+// 原始类型的字面量类型 < 原始类型 < 原始类型对应的装箱类型 < Object
 
-// 数组
-const arr = ['admin', 'user', 'client'] as const;
-const arr2 = [1, true, 'admin'];
+type T15 = string extends any ? true : false; // true
+type T16 = Object extends any ? true : false; // true
+type T17 = Object extends unknown ? true : false; // true
 
-// type ArrType = typeof arr[number];  // "admin" | "user" | "client"
-// type Arr2Type = typeof arr2[number];  // string | number | boolean
-// type FirstArrType = typeof arr2[0]; // string | number | boolean
-// type LastArrType = typeof arr[2]; // "client"
+type T18 = any extends Object ? 1 : 2; // 1 | 2
+type T19 = any extends "Hello" ? 1 : 2; // 1 | 2
+// 总结: any 类型在条件类型中会导致 TypeScript 返回两个可能的结果，因为 any 可以表示任何类型
 
-// 获取元组类型的泛型工具
-type ArrType<T extends readonly any[]> = T[number];
-// type A = ArrType<["admin", "user", "client"]>  // "admin" | "user" | "client"
-type A = ArrType<typeof arr2> // string | number | boolean
+// unknown 是 any 的子类型吗？是的，unknown 是 any 的子类型，因为 any 可以表示任何类型，包括 unknown
+type T20 = unknown extends any ? 1 : 2; // 1
+// any 是 unknown 的子类型吗？是的，any 也是 unknown 的子类型，因为 unknown 可以表示任何类型，包括 any
+type T21 = any extends unknown ? 1 : 2; // 1
+// 总结: unknown 是 any 的子类型，any 也是 unknown 的子类型
 
-// 获取数组长度 length
-type Len = typeof arr['length'];  // 3
-type LenType = typeof arr2['length']; // number
-
-// 获取数组长度的泛型工具
-type ArrLen<T extends readonly any[]> = T['length'];
-// 直接写一个数组就会认为这个数组是元组
-type B = ArrLen<[1, 2, 3, 4, 5, 6]>;  // 6
-
-// 泛型 + 扩展运算符 ... + 方括号运算符 []
-// 注意: 扩展运算符只能用于数组
-type Concat<T extends any[], U extends any[]> = [...T, ...U];
-type Result = Concat<[1, true], ["admin", null]>; // [1, true, "admin", null]
+type T22 = never extends "Hello" ? true : false; // true
+type T23 = never extends unknown ? true : false; // true
+type T24 = "Hello" extends never ? true : false; // false
+// 总结: never 是任何类型的子类型，但是任何类型都不是 never 的子类型
