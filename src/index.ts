@@ -1,38 +1,105 @@
-type T1 = 1 extends number ? true : false; // true
-type T2 = "1" extends number ? true : false; // false
-type T3 = string extends object ? true : false; // false
-type T4 = string extends Object ? true : false; // true
-type T5 = { age: 18 } extends object ? true : false; // true
-type T6 = { a: 1, b: 2 } extends { a: 1 } ? true : false; // true: { a: 1, b: 2 } 是 { a: 1 } 的子类型
-type T7 = { a: 1 } extends { a: 1, b: 2 } ? true : false; // false: { a: 1 } 不是 { a: 1, b: 2 } 的子类型
-type T8 = string extends {} ? true : false; // true: 空对象是所有类型的子类型
+// 条件类型结合泛型使用
+// type IsString<T> = T extends string ? true : false;
+// type A = IsString<string>; // true
+// type B = IsString<number>; // false
+// type C = IsString<"Hello">; // true
+// type D = IsString<3>; // false
 
-type T9 = {} extends object ? true : false; // true: 空对象是所有类型的子类型
-type T10 = object extends {} ? true : false; // true
-type T11 = {} extends Object ? true : false; // true
-type T12 = Object extends {} ? true : false; // true
-type T13 = Object extends object ? true : false; // true
-type T14 = object extends Object ? true : false; // true
-// 总结: {} 是所有类型的子类型，Object 是所有对象类型的子类型，object 是所有非原始类型的子类型
+// 实现一个IF类型工具, 接受条件, 如果条件为真（条件只能是true或者false类型）
+// 就返回类型T， 否则就返回类型F
+type IF<C extends boolean, T, F> = C extends true ? T : F;
+type A = IF<true, "a", "b">;  // a
+type B = IF<false, "a", "b">; // b
+type C = IF<true, number, string>;  // number
 
-// 只需要记住一点：extends 是判断左边的类型是否是右边类型的子类型
-// 原始类型的字面量类型 < 原始类型 < 原始类型对应的装箱类型 < Object
 
-type T15 = string extends any ? true : false; // true
-type T16 = Object extends any ? true : false; // true
-type T17 = Object extends unknown ? true : false; // true
+// type Result = { a: string, b: number } extends { a: string } ? true : false; // true
+type ObjLength = {
+  length: number
+}
+// 获取传入对象的长度, 传入的对象参数必须包含length属性
+function getObjLen<T extends ObjLength>(obj: T) {
+  // todo ...
+  return obj.length;
+}
 
-type T18 = any extends Object ? 1 : 2; // 1 | 2
-type T19 = any extends "Hello" ? 1 : 2; // 1 | 2
-// 总结: any 类型在条件类型中会导致 TypeScript 返回两个可能的结果，因为 any 可以表示任何类型
+getObjLen("Hello World");
+// getObjLen(123); // 类型“number”的参数不能赋给类型“ObjLength”的参数
+getObjLen([1, 2, 3]);
+getObjLen({ a: "hello world", length: 3 });
 
-// unknown 是 any 的子类型吗？是的，unknown 是 any 的子类型，因为 any 可以表示任何类型，包括 unknown
-type T20 = unknown extends any ? 1 : 2; // 1
-// any 是 unknown 的子类型吗？是的，any 也是 unknown 的子类型，因为 unknown 可以表示任何类型，包括 any
-type T21 = any extends unknown ? 1 : 2; // 1
-// 总结: unknown 是 any 的子类型，any 也是 unknown 的子类型
 
-type T22 = never extends "Hello" ? true : false; // true
-type T23 = never extends unknown ? true : false; // true
-type T24 = "Hello" extends never ? true : false; // false
-// 总结: never 是任何类型的子类型，但是任何类型都不是 never 的子类型
+// type Message<T extends { message: unknown }> = T['message'];
+// 如果传入的对象中有message则返回message的值如果没有则返回never
+type Message<T> = T extends { message: unknown } ? T['message'] : never;
+
+let person = {
+  id: 1,
+  message: 'hello'
+}
+
+type t = Message<{}>; // never
+type PersonMessage = Message<typeof person>;  // string
+
+
+// 写一个类型工具, 提取具体的类型
+type Flatten<T> = T extends any[] ? T[number] : T;
+
+type Str = Flatten<string>; // string
+type Num = Flatten<number[]>; // number
+type Tup = Flatten<[1, true, undefined]>; // true | 1 | undefined
+
+const arr = [
+  { id: 1, name: 'Joker' },
+  { id: 2, name: 'Anna' },
+  { id: 3, name: 'Hark' }
+]
+type Arr = Flatten<typeof arr>; // { id: number, name: string }
+
+
+// 条件类型的嵌套 
+type GetType<T> = T extends string ? "string"
+  : T extends number ? "number"
+  : T extends bigint ? "bigint"
+  : T extends boolean ? "boolean"
+  : T extends symbol ? "symbol"
+  : T extends null ? "null"
+  : T extends undefined ? "undefined"
+  : T extends any[] ? "array"
+  : T extends Function ? "function"
+  : "object"
+
+type T0 = GetType<'Hello'>; // string
+type T1 = GetType<123n>;  // bigint
+type T2 = GetType<true>;  // boolean
+type T3 = GetType<null>;  // null
+type T4 = GetType<() => void>;  // function
+type T5 = GetType<[1, 'a', 11n, true]>;  // array
+type T6 = GetType<{}>;  // object
+
+// 实现类型工具 Merge
+// 将两个类型合并为一个类型, 第二个类型的键会覆盖第一个类型的键
+type Foo = {
+  name: string,
+  age: string
+}
+
+type Bar = {
+  age: number,
+  sex: string
+}
+
+// 联合类型会自动的去除重复
+// type A = 1 | 2 | 3 | 3 | 2 | 2 | 1 | 4; // 1 | 2 | 3 | 4
+type Merge<T, U> = {
+  // keyof T 表示类型 T 的所有键的联合类型, keyof U 表示类型 U 的所有键的联合类型
+  // 遍历所有的key, 联合类型会自动的去除重复
+  [key in keyof T | keyof U]
+  // 这是一个条件类型，检查 key 是否是 U 的键, 如果 key 是 U 的键，则返回 U[key] 的类型
+  : key extends keyof U ? U[key]
+  // 这是一个条件类型，检查 key 是否是 T 的键, 如果 key 是 T 的键，则返回 T[key] 的类型
+  : key extends keyof T ? T[key]
+  // 如果 key 既不是 U 的键, 也不是 T 的键, 则类型为 never
+  : never
+}
+type Result = Merge<Foo, Bar>;  // { name: string, age: number, sex: string }
