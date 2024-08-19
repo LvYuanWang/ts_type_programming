@@ -1,167 +1,53 @@
-### 分布(分发)式条件特性
+### 映射类型的属性过滤
 
-条件类型在结合**联合类型+泛型**使用时，会触发分布式条件特性
-
-| 分布式条件类型                                  | 等价于                                                       |
-| ----------------------------------------------- | ------------------------------------------------------------ |
-| `string extends T ? A : B`                      | `string extends T ? A : B`                                   |
-| `(string | number) extends T ? A : B`           | `(string extends T ? A : B) | (number extends T ? A : B)`    |
-| `(string | number | boolean) extends T ? A : B` | `(string extends T ? A : B) | (number extends T ? A : B) | (boolean extends T ? A : B)` |
-
-上节课不是写过这样的类型工具吗
-
-```typescript
-type IsString<T> = T extends string ? true : false;
-
-type A = IsString<string>; // true
-type B = IsString<number>; // false
-type C = IsString<"abc">; // true
-type D = IsString<123>; // false
-```
-
-如果我们传入的`T`是一个联合类型，那么就会触发分布式特性
-
-```typescript
-type IsString<T> = T extends string ? 1 : 2;
-type E = IsString<"a" | true | 1>; // 1 | 2
-```
-
-我们可以写的再灵活一些。比如我们定义下面的类型：
-
-```typescript
-type MyInclude<T, U> = T extends U ? T : never;
-```
-
-我们可以这样使用：
-
-```typescript
-type A = "a" | "b" | "c";
-type B = "a" | "b";
-type C = MyInclude<A, B>; // a | b
-```
-
-其实`MyInclude`干了类似于下面的事情：
-
-```typescript
-type C = MyInclude<"a", "a" | "b">
-  | MyInclude<"b", "a" | "b">
-  | MyInclude<"c", "a" | "b">; 
-```
-
-我们可以替换为具体的定义来理解一下：
-
-```typescript
-type C = ("a" extends "a" | "b" ? "a" : never)
-	| ("b" extends "a" | "b" ? "b" : never)
-	| ("c" extends "a" | "b" ? "c" : never)
-```
-
-这样其实得到结果：
-
-```typescript
-type C = "a" | "b" | never
-```
-
-最后根据never的特性，直接省略掉，得到最后的结果
-
-```typescript
-type C = "a" | "b"
-```
-
-
-
-上面`MyInclude`这个代码例子其实完全可以反过来，又形成另外一个类型：
-
-```typescript
-type MyExclude<T, U> = T extends U ? never : T;
-
-type A = "a" | "b" | "c";
-type B = "a" | "b";
-type C = MyExclude<A, B>; // c
-```
-
-大家可以按照上面的步骤，自行分析一下
-
-`MyInclude`实际上是[Extract<Type, Union>](https://www.typescriptlang.org/docs/handbook/utility-types.html#extracttype-union)工具类型的实现
-
-`MyExclude`实际上是[Exclude<UnionType, ExcludedMembers>](https://www.typescriptlang.org/docs/handbook/utility-types.html#excludeuniontype-excludedmembers)工具类型的实现
-
-根据[Exclude<UnionType, ExcludedMembers>](https://www.typescriptlang.org/docs/handbook/utility-types.html#excludeuniontype-excludedmembers)和[Pick<Type, Keys>](https://www.typescriptlang.org/docs/handbook/utility-types.html#picktype-keys)工具还能实现和[Pick<Type, Keys>](https://www.typescriptlang.org/docs/handbook/utility-types.html#picktype-keys)工具相反的效果
-
-```typescript
-type MyOmit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>> 
-```
-
-```typescript
-type Foo = {
-	name: string
-	age: number
-}
-
-type Bar = MyOmit<Foo, 'age'> //{ name: string }
-```
-
-MyOmit的实现，其实就是[Omit<Type, Keys>](https://www.typescriptlang.org/docs/handbook/utility-types.html#omittype-keys)工具类型的实现
-
-这几个工具，我们可以做个案例来练习一下，比如有如下对象字面量类型：
+上面我们通过`Pick` + `Exclude`实现了`Omit`类型工具，那我们能不能完全自己实现，不借助已有的类型工具呢？也可以，不过我们需要掌握一个技巧：通过`as + never`实现属性过滤的效果
 
 ```typescript
 type User = {
-  id: number
+  readonly id: number,
   name: string
-  age: number
   tel: string
-  address: string
-}
-```
-
-现在希望实现一个工具类型，将选择键名设置为可选，比如，如果设置age，tel和address，那么经过工具类型转换之后，上面的类型别名就会变为：
-
-```typescript
-type User = {
-  id: number
-  name: string
-  age?: number
-  tel?: string
   address?: string
 }
-```
 
-```typescript
-// type RequiredPick = Omit<User, "age"|"tel"|"address"> 
-// type PartialPick = Partial<Pick<User, "age" | "tel" | "address">>
-
-// type OptionalPick = RequiredPick & PartialPick
-// let user: OptionalPick = {
-//   id: 1,
-//   name: "John",
-// }
-
-type OptionalPick<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>; 
-
-let user: OptionalPick<User, "address" | "age" | "tel"> = {
-  id: 1,
-  name: "John",
+type MyOmit<T, K extends keyof T> = {
+  [P in keyof T as P extends K ? never : P]: T[P]
 }
+
+type A = MyOmit<User, "tel" | "address">; //  {readonly id: number; name: string}
 ```
 
+在例子中，映射 `K in keyof T` 获取类型 T 的每一个属性以后，后面紧跟着`as`其实是可以为键重新映射命名的
 
+不过现在，它的键名重映射 `as P extends K ? never : P`，使用了条件运算符，又会触发分布式处理
 
-最后，**触发分布式条件类型需要注意两点：**
+> "id" ---> "tel" | "address" ? never : "id"
+>
+> "name" ---> "tel" | "address" ? never : "name"
+>
+> "tel" ---> "tel" | "address" ? never : "tel"
+>
+> "address" ---> "tel" | "address" ? never : "address"
+>
+> "id" |  "name" | never | never ---> "id" |  "name" 
 
-1、类型参数需要通过泛型参数的方式传入，也就是下面这种直接写死的是不行的
+我们还能再升级一下，比如：只保留User值类型是string类型的，生成新的类型
 
 ```typescript
-// 始终都是"no"
-type A = string | number | boolean extends string | number ? "yes" : "no";  
+type PickStringValueType<T> = {
+  [K in keyof T as T[K] extends string ? K : never]: T[K]
+}
+type FilteredUser = PickStringValueType<User> //{name:string, tel:string}
 ```
 
-2、类型参数需要是一个联合类型，并且条件中的泛型参数不能被包裹，比较下面两个结果的区别
+当然，你想反过来，去掉值类型是string类型的，将`K`和`never`换个位置就行了
+
+其实上面做的更加普遍性一些，就完全可以写成一个类型工具：
 
 ```typescript
-type B<T> = T extends any ? T[] : never;
-type C<T> = [T] extends any ? T[] : never;
+type PickByType<T, U> = {
+  [P in keyof T as T[P] extends U ? P : never]: T[P];
+};
 
-type D = B<string | number>;  // string[] | number[]
-type E = C<string | number>;  // (string | number)[]Ò
+type B = PickByType<User, number> // { readonly id: number }
 ```
