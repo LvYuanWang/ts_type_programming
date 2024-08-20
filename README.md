@@ -1,92 +1,143 @@
-### `infer` 
+## 模板字符串类型
 
-通过使用`infer`关键字，还可以在**条件类型中声明泛型类型**。
-
-```typescript
-// type Flatten<T> = T extends any[] ? T[number] : T;
-type Flatten<T> = T extends (infer U)[] ? U : T;
-type T1 = Flatten<number[]>; // number
-type T2 = Flatten<string>; // string
-const arr = [
-  { id: 1, name: "aaa" },
-  { id: 2, name: "bbb" },
-  { id: 3, name: "ccc" }
-];
-
-// 对象字面量类型 {id: number, name: string}
-type T3 = Flatten<typeof arr>;
-```
-
-对比之前方括号运算符`T[number]`其实使用`infer`关键字之后，我们的类型代码更易读了。如果你不是对方括号运算符那么的熟悉，`T[number]`的写法本身就很具有迷惑性。
-
-`infer`，意为推断，如 `infer U` 中 `U` 就表示 **待推断的类型**，你完全可以先把这里的`infer U`看做`any`，当执行时，typescript推导出具体的类型，并将类型赋值给`U`
-
-比如，我们希望获取数组第一个元素的类型：
+TS 字符串模板类型的写法跟 JS 模板字符串非常类似
 
 ```typescript
-type arr1 = ['a', 'b', 'c'];
-type arr2 = [3, 2, 1];
-
-type F1 = First<arr1>; // 'a'
-type F2 = First<arr2>; //  3
+type World = 'world';
+type Greeting = `hello ${World}`;
 ```
 
-我们可以通过infer进行推断，把第一个元素和其他元素分开，再连成一个数组就好。
+除了前面的 `type` 跟 `JS` 不一样之外，后面就是一模一样了，通过 `${}` 包裹，里面可以直接传入类型变量，使用变量的模板字符串可以实现你意想不到的效果。
 
 ```typescript
-type First<T extends any[]> = T extends [infer F, ...infer R] ? F : never;
+type Direction = "left" | "right" | "top" | "bottom";
+type BoxName = "padding" | "margin" | "border";
+type BoxModel = `${BoxName}-${Direction}`;
 ```
 
-当然，其实也可以用`T[K]`，使用方括号运算符
+使用模板字符串，联合类型会被挨个组合到模板中，最后轻松的生成一个包含各种组合的联合类型
+
+使用对象也能处理一些更多的内容：
 
 ```typescript
-type First<T extends any[]> = T extends [] ? never : T[0];
+const person = {
+  firstName: "John",
+  lastName: "Doe",
+  age: 30,
+};
+
+type PersonKeys = keyof typeof person;
+
+type EventPersonChange = `${PersonKeys}Changed`;
+
+// 泛型处理
+// keyof T 默认会认为对象的键有string|number|symbol
+// keyof T & string 相当于 (string|number|symbol) & string ---> string
+type EventObjectChange<T> = `${keyof T & string}Changed`;
+
+type P = EventObjectChange<typeof person>;
+                                                    
 ```
 
-`T[0]`其实就是获取第0个位置上元素的类型，这里判断`T`和一个空元组的兼容性，也就是T不是一个空元组，那就得到第0个位置上元素的类型。
-
-其实还能有下面的写法：
+加入映射类型：
 
 ```typescript
-type First<T extends any[]> = T['length'] extends 0 ? never : T[0];
+type A = {
+  foo: number;
+  bar: number;
+};
+
+type B = {
+  [K in keyof A as `${K}ID`]: number;
+};
+
+// 等同于
+// type B = {
+//   fooID: number;
+//   barID: number;
+// }  
 ```
 
-`T['length']`可以获取length属性的类型，其实也就是数组长度，不是0的话，得到第0个位置上元素的类型
+但是如果想做的通用一点，也就是和泛型结合，会遇到问题：
 
 ```typescript
-type ArrayLength<T extends any[]> = T['length'];
+// 结合泛型使用，由于keyof T得到的是一个联合类型，不能直接用于模板字符串拼接
+// 需要使用 交叉类型 &，去掉其他类型，只保留字符串类型
+type AddID<T> = {
+  [K in keyof T as `${K & string}ID`]: number;
+};
 
-type L1 = ArrayLength<arr1>; // 3
+type D = AddID<A>;
 ```
 
-继续，交换元组两个位置上的类型
+
+
+Typescript官方也提供了很多内置的字符串工具[Intrinsic String Manipulation Types](https://www.typescriptlang.org/docs/handbook/utility-types.html#intrinsic-string-manipulation-types)，根据名字大概也能猜测出意思
 
 ```typescript
-type Swap<T extends any[]> = T extends [infer A, infer B] ? [B, A] : T;
+type World = 'world';
+type Greeting = `hello ${World}`;
 
-type S1 = Swap<[1, 2]>; // 符合元组结构，首尾元素替换[2, 1]
-type S2 = Swap<[1,2,3,4]>; // 不符合元组结构，直接返回原数组[1,2,3,4]
+type UpperCaseGreeting = Uppercase<Greeting>; // `HELLO ${Uppercase<World>}`;
+// type Greeting = "HELLO WORLD"
+
+type LowerCaseGreeting = Lowercase<Greeting>;
+// type LowerCaseGreeting = "hello world"
+
+type CapitalizeGreeting = Capitalize<LowerCaseGreeting>;
+// type CapitalizeGreeting = "Hello world"
+
+type UnUpperCaseGreeting = Uncapitalize<UpperCaseGreeting>;
+// type CapitalizeGreeting = "hELLO WORLD"
 ```
 
-当然，如果你希望无论如何数组的首位都进行交换，一样简单，加上**`...`操作符**即可
+这还仅仅是字符串模板的初级使用，结合这泛型编程，可以玩出很多花样
+
+比如提供一个对象字面量类型，通过字符串模板直接得到Getter和Setter类型
 
 ```typescript
-type Swap<T extends any[]> = T extends [infer A, ...infer Rest ,infer B] ? [B,...Rest, A] : T;
+type User = { name: string; age: number; address: string };
+
+type AddGetter<T> = {
+  [K in keyof T as `get${Capitalize<K & string>}`]: () => T[K];
+}
+
+type AddSetter<T> = {
+  [K in keyof T as `set${Capitalize<K & string>}`]: (arg: T[K]) => void;
+}
+
+type UserGetter = AddGetter<User>;
+type UserSetter = AddSetter<User>;
 ```
 
-同样，函数也能进行推断
+还可以处理的更通用一些：
 
 ```typescript
-type GetReturnType<T> = T extends (...args: any[]) => infer R 
-  ? R
-  : never;
+type ObjectWithGetterSetter<T extends object> = T & AddGetter<T> & AddSetter<T>;
 
-// string 
-type A = GetReturnType<() => string>
-// void
-type B = GetReturnType<(n: number) => void>
-// number
-type C = GetReturnType<() => number>
+type UserWithGetterSetter = ObjectWithGetterSetter<User>;
+
+let p: UserWithGetterSetter = {
+  name: "jack",
+  age: 20,
+  address: "北京",
+  getName() {
+    return this.name;
+  },
+  getAge() {
+    return this.age;
+  },
+  getAddress() {
+    return this.address;
+  },
+  setName(name: string) {
+    this.name = name;
+  },
+  setAge(age: number) {
+    this.age = age;
+  },
+  setAddress(address: string) {
+    this.address = address;
+  }
+}
 ```
-
-`GetReturnType`实际上是[`ReturnType<Type>`](https://www.typescriptlang.org/docs/handbook/utility-types.html#returntypetype)的具体实现
