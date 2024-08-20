@@ -1,57 +1,54 @@
-type User = {
-  readonly id: number,
-  name: string,
-  tel: string,
-  address?: string
-}
+// 通过使用 infer 关键字，还可以在 条件类型中声明泛型类型
+// type Flatten<T> = T extends any[] ? T[number] : T;
+// 使用 infer 优化
+type Flatten<T> = T extends (infer U)[] ? U : T;  // 如果传入的 T 为 string[] 则 U 为 string
 
-type A<T> = {
-  [key in keyof T as "aaa"]: T[key];
-}
+type T1 = Flatten<number[]>;  // number
+type T2 = Flatten<string[]>;  // string
+type T3 = Flatten<[true, "two", 3, 4n]>;  // true, "two", 3, 4n
 
-type B = A<User>; // { readonly aaa: string | number | undefined }
+const arr = [
+  { id: 1, name: "aaa" },
+  { id: 2, name: "bbb" },
+  { id: 3, name: "ccc" }
+]
 
-// 将之前的 MyOmit 进行优化及更改
-// 之前写的 Omit 工具
-// type MyOmit<T, U> = Pick<T, Exclude<keyof T, U>>;
-
-// 使用 映射类型 as 关键字+分布式条件特性 进行修改
-type MyOmit<T, U> = {
-  [key in keyof T as key extends U ? never : key]: T[key];
-}
-
-type OmitUser = MyOmit<User, "tel" | "address">; // { readonly id: number, name: string }
-/*
-key in keyof T ==> "id" | "name" | "tel" | "address"
-
-// 触发分布式条件特性
-key extends "tel" | "address" ? never : key
-"id" -> "tel" | "address" ? never : "id" ==> "id"
-"name" -> "tel" | "address" ? never : "name" ==> "name"
-"tel" -> "tel" | "address" ? never : "tel" ==> never
-"address" -> "tel" | "address" ? never : "address" ==> never
-
-最终结果: "id" | "name" | never | never   ==>   "id" | "name"
-*/
-
-// 将这个类型反过来任然和 MyPick 一样
-type MyPick<T, U extends keyof T> = {
-  [key in keyof T as key extends U ? key : never]: T[key];
-}
-
-type PickUser = MyPick<User, "tel" | "address">;  // { tel: string ,address?: string | undefined }
+type T4 = Flatten<typeof arr>;
+type T5 = Flatten<"hello">; // "hello"
 
 
-// 如果想只保留 User 对象中 值的类型为 string 的
-type PickStringValueType<T> = {
-  [key in keyof T as T[key] extends string ? key : never]: T[key];
-}
+// 需求: 要求写一个泛型工具 传入的必须是数组, 如果数组为空则输出 never, 不然则输出数组的第一个内容
+// type First<T extends any[]> = T extends [] ? never : T[0];
+// type First<T extends any[]> = T["length"] extends 0 ? never : T[0];
+type First<T extends any[]> = T extends [infer A, ...infer B] ? A : never;
+// 获取 数组最后一个内容
+type Last<T extends any[]> = T extends [...infer F, infer L] ? L : never;
 
-type FilterStringUser = PickStringValueType<User>;  // { name: string, tel: string }
+type Arr1 = ["a", "b", "c"];
+type Arr2 = [1, 2, 3];
 
-// 稍微改改 直接让它变成通用的
-type PickByType<T, U> = {
-  [key in keyof T as T[key] extends U ? key : never]: T[key];
-}
+type F1 = First<Arr1>;  // "a"
+type F2 = First<Arr2>;  // 1
+type F3 = First<[]>;  // never
 
-type PickByTypeUser = PickByType<User, number>; // { readonly id: number }
+type F4 = Last<Arr1>; // "c"
+type F5 = Last<Arr2>; // 3
+
+// 通过 infer 实现元组两个位置上的类型交换
+type Swap<T extends any[]> = T extends [infer A, ...infer R, infer B] ? [B, ...R, A] : never;
+
+type S1 = Swap<[1, 2]>; // [2, 1];
+type S2 = Swap<[true, "two", 3, 4n]>; // [4n, "two", 3, true]
+
+// 传入一个函数, 获取函数的返回类型
+type GetReturnType<T extends (...args: any[]) => any> = T extends (...args: any[]) => infer R ? R : never;
+
+type A = GetReturnType<() => string>; // string
+type B = GetReturnType<(n: number, b: string) => void>; // void
+
+// 传入一个函数, 获取函数的所有参数
+type GetParameters<T extends (...args: any[]) => any> = T extends (...args: infer P) => any ? P : never;
+
+type P1 = GetParameters<(n: number, b: string) => bigint>;  // [n: number, b: string]
+type P2 = GetParameters<(name: string, age: number) => object>;  // [name: string, age: number]
+type P3 = GetParameters<() => string>;  // []
