@@ -1,143 +1,54 @@
-## 递归复用
+## 分发逆变推断
 
-现在有这么一个需求，需要将字符串字面量类型中的每个值类型取出，组成联合类型，类型于：
+根据函数的型变，可以做出一些比较复杂的类型体操变化
 
-```typescript
-type A = "12345"
-转变为
-type B = "1" | "2" | "3" | "4" | "5" 
-```
-
-如果字符串字符串长度不变，那我们可以直接使用`infer`进行类型推断
+实现高级工具类型函数：联合类型转为交叉类型
 
 ```typescript
-type A = "12345"
-
-type StringToUnion<S extends string> =
-  S extends `${infer One}${infer Two}${infer Three}${infer Four}${infer Five}`
-  ? One | Two | Three | Four | Five
-  : never;
-
-type B = StringToUnion<A>
+type I = UnionToIntersection<{ id: 1 } | { name: "jack" } | { sex: "男" }>; 
+// { id: 1 } & { name: "jack" } & { sex: "男" }
 ```
 
-但是这仅仅才5个字符串，如果字符串较多的话，不是要`infer`推断一堆类型，比如来个九字真言，难道要`infer9`次？
+在所有类型转换中，联合转交叉可以说是比较有难度的了
+
+核心在于其他类型都有比较简单的遍历方法，比如元组的 `T extends [infer F, ...infer R]`，对象的 `[P in keyof T]: T[P]`，还有字符串的遍历套路，在这些类型中，转交叉其实非常简单。这里以元组为例：
 
 ```typescript
-type A = "临兵斗者皆阵列前行"
+type TupleToIntersection<T extends any[]> =
+  // 递归复用遍历
+  T extends [infer F, ...infer R]
+    ? // 元素交叉即可
+      F & TupleToIntersection<R>
+    : unknown;  // any & unknown = any 所以当 T 为空时，返回 unknown不影响结果
+
+// MyType = {id: 1} & {name: 'jack'}
+type MyType = TupleToIntersection<[{ id: 1 }, { name: 'jack' }]>;
 ```
 
-这个时候我们就可以使用递归复用：**当处理数量较多的类型的时候，可以只处理一个类型，然后递归的调用自身处理下一个类型，直到结束条件**
+但是对联合类型就麻烦了，因为我们无法把联合类型一个一个拉出来进行遍历，联合类型只有分布式(分发)特性。但是分发特性也是从一个联合类型返回一个新的联合类型，并不能转成交叉类型。
+
+那么这个题，可以通过利用联合类型的`分布式特性` + `逆变特性` + `infer类型推断`实现这个效果
 
 ```typescript
-type NineMantra = "临兵斗者皆阵列前行"
-
-type StringToUnion<S extends string> =
-  S extends `${infer One}${infer Rest}`
-  ? One | StringToUnion<Rest>
-  : never;
-
-type NineMantraUnion = StringToUnion<NineMantra>
+type UnionToIntersection<U> =
+  // 利用分发特性生成 
+  // (arg: { id: 1 }) => any | 
+  // (arg: { name: "jack" }) => any | 
+  // (arg: { sex: "男" }) => any
+  (U extends any ? (arg: U) => any : never) extends (arg: infer P) => any
+    ? P // 利用逆变特性，P = { id: 1 } & { name: "jack" } & { sex: "男" }
+    : never;
 ```
 
-和字符串字面量类型很类似的，如果一个数组要做一些类似的类型处理，那一样可以递归，比如，我们要把数组中的元素类型倒序
+函数参数逆变的特性不知道大家有没有忘记：
 
 ```typescript
-type ReverseArr<T extends any[]> = 
-  T extends [infer One, infer Two, infer Three, infer Four, infer Five]
-  ? [Five, Four, Three, Two, One]
-  : never;
+type C = { id: 1, name: "jack", sex: "男" } extends { id: 1 } ? 1 : 2; // 1
 
-type Reversed = ReverseArr<[1, 2, 3, 4, 5]> // [5, 4, 3, 2, 1]
+type D = ((arg: { id: 1 } ) => any) extends 
+	((arg: { id: 1, name: "jack", sex: "男" }) => any) 
+	? 1 : 2;  //1
 ```
 
-同样，我们使用递归复用：
 
-```typescript
-type ReverseArr<T extends any[]> = 
-  T extends [infer One, ...infer Rest]
-  ? [...ReverseArr<Rest>, One]
-  : T; // 注意结束之后返回的是数组
-
-type Reversed = ReverseArr<[1, 2, 3, 4, 5]> // [5, 4, 3, 2, 1]
-```
-
-再来一个，比如，我们现在通过编写一个类型工具，获取一个字符串字面量类型的长度
-
-```typescript
-type S = LengthOfString<"12345">; // 5
-```
-
-我们可以思考，之前我们讲过数组类型是不是可以获取长度，通过T['length']，那我们能不能把字符串类型转成数组类型呢？完全可以，通过infer推断和递归复用：
-
-```typescript
-type LengthOfString<
-  S extends string,
-  T extends string[] = []
-> = S extends `${infer F}${infer R}`
-  ? LengthOfString<R, [...T, F]>
-  : T['length'];
-
-type S = LengthOfString<"12345">;
-```
-
-通过递归复用，还能实现对索引映射类型的深递归，比如。我们希望将一个层级较深的对象类型全部属性转为`readonly`只读
-
-```typescript
-type User = {
-  id: number,
-  name: string,
-  address: {
-    province: string,
-    city: {
-      name: string
-      street: string
-    }
-  }
-}
-```
-
-如果我们使用之前写的MyReadonly处理,仅仅只会把第一个层级的属性转变为`readonly`
-
-```typescript
-type MyReadonly<T> = {
-  readonly [key in keyof T]: T[key]
-}
-
-type ReadonlyUser = MyReadonly<User>
-```
-
-这里我们简单使用递归就能实现想要的效果
-
-```typescript
-type DeepReadonly<T extends Record<string, any>> =
-  {
-    readonly [K in keyof T]: T[K] extends Record<string, any> ? DeepReadonly<T[K]> : T[K]
-  }
-
-type ReadonlyUser = DeepReadonly<User>
-```
-
-不过这样不好看到最后转换的效果，因为TS为了保证性能，并不会做深层的计算。
-
-有一个比较实用的类型体操技能，就是在比较复杂的，特别是需要递归计算的类型体操计算外，包裹一层代码：
-
-```typescript
-T extends any ?
-具体类型体操代码 
-: never
-```
-
-这样我们就可以看到最后计算完成的效果，比如把上面的代码换成:
-
-```typescript
-type DeepReadonly<T extends Record<string, any>> =
-  T extends any ?
-  {
-    readonly [K in keyof T]: T[K] extends Record<string, any> ? DeepReadonly<T[K]> : T[K]
-  }
-  : never
-
-type ReadonlyUser = DeepReadonly<User> //现在可以看到全部计算完成的类型效果
-```
 
