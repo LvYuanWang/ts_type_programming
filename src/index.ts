@@ -1,104 +1,75 @@
-type World = "world";
-type Greeting = `hello ${World}`;
+type A = "12345"; // 将它变成: "1" | "2" | "3" | "4" | "5"
 
-// 使用官方提供的字符串类型泛型工具
-// 将传入的字符串转大写
-type UppercaseGreeting = Uppercase<Greeting>; // "HELLO WORLD";
-type UppercaseGreeting2 = `hello ${Uppercase<World>}`; // "hello WORLD"
-// 将传入的字符串转小写
-type LowercaseGreeting = Lowercase<UppercaseGreeting>;  // "hello world";
-// 将传入的字符串首字母转大写
-type CapitalizeGreeting = `${Capitalize<"hello">} ${Capitalize<World>}`;  // "Hello World"
-// 将传入的字符串首字母转小写
-type UncapitalizeGreeting = Uncapitalize<CapitalizeGreeting>; // "hello World"
+type StringToUnion<S extends string>
+  = S extends `${infer One}${infer Two}${infer Three}${infer Four}${infer Five}`
+  ? One | Two | Three | Four | Five
+  : never;
 
+// 虽然可以实现,但是这种方法 很麻烦
+type B = StringToUnion<A>;  // "1" | "2" | "3" | "4" | "5"
 
-// 模板字符串类型和联合类型一起使用, 有交叉相乘的效果
-type Direction = "left" | "right" | "top" | "bottom";
-type BoxName = "padding" | "border" | "margin";
-type BoxModule = `${BoxName}-${Direction}`; // "padding-left" | "padding-right" | "padding-top" | "padding-bottom" | "border-left" | "border-right" | "border-top" | "border-bottom" | "margin-left" | "margin-right" | "margin-top" | "margin-bottom"
-type MarginDirection = `margin-${Direction}`; // "margin-left" | "margin-right" | "margin-top" | "margin-bottom"
+type NineMantra = "临兵斗者皆阵列前行";
+
+// 使用 递归 解决, 在泛型中也能使用递归
+type NewStringToUnion<S extends string> = S extends `${infer One}${infer Rest}`
+  ? One | NewStringToUnion<Rest>
+  : never;
+
+type C = NewStringToUnion<NineMantra>;  // "临" | "兵" | "斗" | "者" | "皆" | "阵" | "列" | "前" | "行"
 
 
-const person = {
-  firstName: "Joan",
-  lastName: "Doe",
-  age: 30
-}
+// 将数组中的每个元素类型进行翻转
 
-// typeof:
-// 1. 获取变量或表达式的类型：用于获取一个变量或表达式的类型，并将其用作类型注解
-// 2. 类型保护：在运行时检查变量的类型
-// type personType = typeof person; // { firstName: string, lastName: string, age: number }
-type PersonKeys = keyof typeof person;  // "firstName" | "lastName" | "age"
-type EventPersonChange = `${PersonKeys}Changed`;  // "firstNameChanged" | "lastNameChanged" | "ageChanged"
+type D = [1, 2, 3, 4, 5, 6, 7];
 
-type EventObjectChange<T> = `${keyof T & string}Change`;
-type P = EventObjectChange<typeof person>;
+type ReverseArr<T extends any[]> = T extends [infer One, ...infer Rest] ? [...ReverseArr<Rest>, One] : T;
 
-// 结合 as 关键字, 实现键名重映射
-type A = {
-  foo: number,
-  bar: number
-}
-
-type C = {
-  name: string,
-  age: number,
-  sex: boolean
-}
-
-type B = {
-  [key in keyof A as `${key}ID`]: A[key]
-}
-
-// type E = keyof any; // string | number | symbol
-// type E = keyof any & string;  // string
-
-type AddID<T> = {
-  [key in keyof T as `${key & string}ID`]: T[key];
-}
-type D = AddID<C>;  // { nameID: string, ageID: number, sexID: boolean }
+type E = ReverseArr<D>; // [7, 6, 5, 4, 3, 2, 1]
 
 
-// 造一个对象的属性访问器
+// 编写类型工具, 获取一个字符串字面量类型的长度
+type LengthOfString<S extends string, T extends string[] = []> = S extends `${infer O}${infer R}`
+  ? LengthOfString<R, [...T, O]>
+  : T["length"];
+
+type F = LengthOfString<"12345678">;  // 8
+
+
+// 编写一个类型工具, 实现映射类型的深层的 readonly
 type User = {
+  id: number,
   name: string,
-  age: number,
-  address: string,
-  // getName: () => string,
-  // setName: (ags: string) => void
-}
-
-type AddGetter<T> = {
-  [key in keyof T as `get${Capitalize<key & string>}`]: () => T[key]
-}
-
-type AddSetter<T> = {
-  // 如果有些地方有时候不要Setter则可以加 +? 随时可写可不写
-  [key in keyof T as `set${Capitalize<key & string>}`]+?: (ags: T[key]) => void
-}
-
-type UserGetter = AddGetter<User>;
-type UserSetter = AddSetter<User>;
-
-// 将 AddGetter及AddSetter 结合
-type ObjectWithGetterSetter<T extends object> = T & AddGetter<T> & AddSetter<T>;
-
-const p: ObjectWithGetterSetter<User> = {
-  name: "Jack",
-  age: 19,
-  address: "南京",
-  getName() {
-    return this.name;
-  },
-  getAge() {
-    return this.age;
-  },
-  getAddress() {
-    return this.address;
-  },
-  setAge(age) {
-    console.log()
+  address: {
+    province: string,
+    city: {
+      cityName: string,
+      street: string
+    }
   }
 }
+
+// type ReadonlyUser = Readonly<User>; // 使用官方给的泛型工具只能对外层的对象添加 readonly 对深层的不起作用
+
+// 测试Record<string, any>
+// type test = number extends Record<string, any> ? true : false;  // false
+// type test2 = { province: string } extends Record<string, any> ? true : false;  // true
+
+type DeepReadonly<T extends Record<string, any>> = {
+  readonly [key in keyof T]: T[key] extends Record<string, any> ? DeepReadonly<T[key]> : T[key];
+}
+
+type ReadonlyUser = DeepReadonly<User>;
+
+let deepReadonlyUser: DeepReadonly<User> = {
+  id: 4,
+  name: 'Joker',
+  address: {
+    province: "湖南省",
+    city: {
+      cityName: "永州",
+      street: "阳光大道"
+    }
+  }
+}
+// deepReadonlyUser.name = "Jack"; // 无法为只读属性赋值
+// deepReadonlyUser.address.province = "广东省"; // 无法为只读属性赋值
